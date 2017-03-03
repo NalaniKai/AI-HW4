@@ -28,12 +28,13 @@ class AIPlayer(Player):
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "Genetic")
-    self.currGenes          #population 
-    self.popSize = 6        #population size
-    self.nextGene = 0       #current gene index
-    self.fitness = []       #fitness score
-    self.currFitness = []   #fitness scores of current gene
-    self.geneGames = 2      #games to test current gene
+        self.currGenes = []     #population 
+        self.popSize = 6        #population size
+        self.nextGene = 0       #current gene index
+        self.fitness = []       #fitness score
+        self.currFitness = []   #fitness scores of current gene
+        self.currGame = 0
+        self.geneGames = 2      #games to test current gene
 
 
 
@@ -41,23 +42,15 @@ class AIPlayer(Player):
         '''
         Description: Initializes first population of genes with random coordinates
         '''
-        enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
-                    (0,1), (1,0)]
         #init with random values
-        for j in range(0, popSize):
+        for j in range(0, self.popSize):
             numToPlace = 11
             positions = []
             #grass, anthill, tunnel
             for i in range(0, numToPlace):
                 pos = None
                 while pos == None:
-                    #Choose any x location
-                    x = random.randint(0, 9)
-                    #Choose any y location on your side of the board
-                    y = random.randint(0, 3)
-                    #Set the move if this space is empty
-                    if (x, y) not in positions:
-                        pos = (x, y)
+                    pos = self.getAgentSideCoord(positions)
                 positions.append(pos)
             #food
             numToPlace = 2
@@ -65,28 +58,64 @@ class AIPlayer(Player):
             for i in range(0, numToPlace):
                 pos = None
                 while pos == None:
-                    #Choose any x location
-                    x = random.randint(0, 9)
-                    #Choose any y location on enemy side of the board
-                    y = random.randint(6, 9)
-                    #Set the move if this space is empty
-                    if (x, y) not in enemySetup or pos:
-                        pos = (x, y)
+                    pos = self.getEnemySideCoord(pos)
                 positions.append(pos)
-            currGenes[j] = positions
-            fitness[j] = 0
+            self.currGenes.append(positions)
+            self.fitness.append(0)
+
+    def getEnemySideCoord(self, pos):
+        enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
+            (0,1), (1,0)]
+
+        #Choose any x location
+        x = random.randint(0, 9)
+        #Choose any y location on enemy side of the board
+        y = random.randint(6, 9)
+        #Set the move if this space is empty
+        if (x, y) not in enemySetup or pos:
+            return (x, y)
+
+    def getAgentSideCoord(self, positions):
+        #Choose any x location
+        x = random.randint(0, 9)
+        #Choose any y location on your side of the board
+        y = random.randint(0, 3)
+        #Set the move if this space is empty
+        if (x, y) not in positions:
+            return (x, y)
 
     def createChildren(self, parent1, parent2):
         #Create two children 
+        split = random.randint(0,12)
+        child1 = parent1[0:split]
+        child1.append(parent2[split:])
+        child1 = self.mutate(child1)
 
-        #USE SLICES
+        child2 = parent2[0:split]
+        child2.append(parent1[split:])
+        child2 = self.mutate(child2)
+
+        return [child1, child2]
+
+    def mutate(self, child):
+        chance = random.randint(0, 9)
+        if chance < 3:
+            pos = random.randint(0,12)
+            coord = None
+            if pos < 11:
+                coord = self.getAgentSideCoord(child)
+            else:
+                coord = self.getEnemySideCoord(child)
+
+            child[pos] = coord 
+
+        return child
 
 
-
-    def createGeneration(self):
+    #def createGeneration(self):
         #next generation from the old one
 
-
+    #def evalFitness(self):
 
     ##
     #getPlacement
@@ -103,44 +132,13 @@ class AIPlayer(Player):
     #Return: The coordinates of where the construction is to be placed
     ##
     def getPlacement(self, currentState):
-        numToPlace = 0
-        #implemented by students to return their next move
+        if self.currGenes == []:
+            self.geneInit()
+
         if currentState.phase == SETUP_PHASE_1:    #stuff on my side
-            numToPlace = 11
-            moves = []
-            for i in range(0, numToPlace):
-                move = None
-                while move == None:
-                    #Choose any x location
-                    x = random.randint(0, 9)
-                    #Choose any y location on your side of the board
-                    y = random.randint(0, 3)
-                    #Set the move if this space is empty
-                    if currentState.board[x][y].constr == None and (x, y) not in moves:
-                        move = (x, y)
-                        #Just need to make the space non-empty. So I threw whatever I felt like in there.
-                        currentState.board[x][y].constr == True
-                moves.append(move)
-            return moves
-        elif currentState.phase == SETUP_PHASE_2:   #stuff on foe's side
-            numToPlace = 2
-            moves = []
-            for i in range(0, numToPlace):
-                move = None
-                while move == None:
-                    #Choose any x location
-                    x = random.randint(0, 9)
-                    #Choose any y location on enemy side of the board
-                    y = random.randint(6, 9)
-                    #Set the move if this space is empty
-                    if currentState.board[x][y].constr == None and (x, y) not in moves:
-                        move = (x, y)
-                        #Just need to make the space non-empty. So I threw whatever I felt like in there.
-                        currentState.board[x][y].constr == True
-                moves.append(move)
-            return moves
-        else:
-            return [(0, 0)]
+            return self.currGenes[self.nextGene][0:11]
+        elif currentState.phase == SETUP_PHASE_2:
+            return self.currGenes[self.nextGene][11:]
     
     ##
     #getMove
@@ -186,6 +184,8 @@ class AIPlayer(Player):
     #
     def registerWin(self, hasWon):
         #Update fitness of currGene
+        self.currFitness[self.currGame] = self.evalFitness()
+
 
         #Judge whether the current gene eval is complete
 
@@ -194,13 +194,6 @@ class AIPlayer(Player):
 
         #Create new Pop if all genes have been fully evaluated
         #reset index to the beginning
-
-
-
-
-
-
-
 
 
         pass
