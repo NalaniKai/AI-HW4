@@ -28,18 +28,53 @@ class AIPlayer(Player):
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "Genetic")
-    self.currGenes
-    self.nextGene
-    self.fitness
+    self.currGenes          #population 
+    self.popSize = 6        #population size
+    self.nextGene = 0       #current gene index
+    self.fitness = []       #fitness score
+    self.currFitness = []   #fitness scores of current gene
+    self.geneGames = 2      #games to test current gene
 
 
 
     def geneInit(self):
+        '''
+        Description: Initializes first population of genes with random coordinates
+        '''
+        enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
+                    (0,1), (1,0)]
         #init with random values
-
-
-        #Reset default values
-
+        for j in range(0, popSize):
+            numToPlace = 11
+            positions = []
+            #grass, anthill, tunnel
+            for i in range(0, numToPlace):
+                pos = None
+                while pos == None:
+                    #Choose any x location
+                    x = random.randint(0, 9)
+                    #Choose any y location on your side of the board
+                    y = random.randint(0, 3)
+                    #Set the move if this space is empty
+                    if (x, y) not in positions:
+                        pos = (x, y)
+                positions.append(pos)
+            #food
+            numToPlace = 2
+            pos = []
+            for i in range(0, numToPlace):
+                pos = None
+                while pos == None:
+                    #Choose any x location
+                    x = random.randint(0, 9)
+                    #Choose any y location on enemy side of the board
+                    y = random.randint(6, 9)
+                    #Set the move if this space is empty
+                    if (x, y) not in enemySetup or pos:
+                        pos = (x, y)
+                positions.append(pos)
+            currGenes[j] = positions
+            fitness[j] = 0
 
     def createChildren(self, parent1, parent2):
         #Create two children 
