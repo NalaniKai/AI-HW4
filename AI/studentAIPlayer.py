@@ -8,6 +8,7 @@ from Ant import UNIT_STATS
 from Move import Move
 from GameState import *
 from AIPlayerUtils import *
+import unittest
 
 ##
 #AIPlayer
@@ -67,32 +68,37 @@ class AIPlayer(Player):
         enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
             (0,1), (1,0)]
 
-        #Choose any x location
-        x = random.randint(0, 9)
-        #Choose any y location on enemy side of the board
-        y = random.randint(6, 9)
-        #Set the move if this space is empty
-        if (x, y) not in enemySetup or pos:
-            return (x, y)
+        while(True):
+            #Choose any x location
+            x = random.randint(0, 9)
+            #Choose any y location on enemy side of the board
+            y = random.randint(6, 9)
+            #Set the move if this space is empty
+            if (x, y) not in enemySetup or pos:
+                return (x, y)
 
     def getAgentSideCoord(self, positions):
-        #Choose any x location
-        x = random.randint(0, 9)
-        #Choose any y location on your side of the board
-        y = random.randint(0, 3)
-        #Set the move if this space is empty
-        if (x, y) not in positions:
-            return (x, y)
+        while(True):
+            #Choose any x location
+            x = random.randint(0, 9)
+            #Choose any y location on your side of the board
+            y = random.randint(0, 3)
+            #Set the move if this space is empty
+            if (x, y) not in positions:
+                return (x, y)
 
     def createChildren(self, parent1, parent2):
         #Create two children 
         split = random.randint(0,12)
+
         child1 = parent1[0:split]
-        child1.append(parent2[split:])
+        for coord in parent2[split:]:
+            child1.append(coord)
         child1 = self.mutate(child1)
 
         child2 = parent2[0:split]
-        child2.append(parent1[split:])
+        for coord in parent1[split:]:
+            child2.append(coord)
         child2 = self.mutate(child2)
 
         return [child1, child2]
@@ -100,7 +106,7 @@ class AIPlayer(Player):
     def mutate(self, child):
         chance = random.randint(0, 9)
         if chance < 3:
-            pos = random.randint(0,12)
+            pos = random.randint(0,len(child)-1)
             coord = None
             if pos < 11:
                 coord = self.getAgentSideCoord(child)
@@ -197,3 +203,63 @@ class AIPlayer(Player):
 
 
         pass
+
+class Unit_Tests(unittest.TestCase):
+
+    def testGeneInit(self):
+        ai = AIPlayer(0)
+        ai.geneInit()
+        self.failIf(ai.currGenes is [])
+        self.failIf(ai.fitness is [])
+
+    def testGetEnemySideCoord(self):
+        ai = AIPlayer(0)
+        pos = ai.getEnemySideCoord((0,0))
+        self.assertTrue(type(pos) is tuple)
+
+    def testGetAgentSideCoord(self):
+        ai = AIPlayer(0)
+        pos = ai.getAgentSideCoord([(0,0),(2,0),(6,8)])
+        self.assertTrue(type(pos) is tuple)
+
+    def testCreateChildren(self):
+        ai = AIPlayer(0)
+        ai.geneInit()
+        p1 = ai.currGenes[0]
+        p2 = ai.currGenes[1]
+        children = ai.createChildren(p1, p2)
+        self.failIf(type(children) is not list)
+
+    def testMutate(self):
+        ai = AIPlayer(0)
+        ai.geneInit()
+        p1 = ai.currGenes[0]
+        p2 = ai.currGenes[1]
+        children = ai.createChildren(p1, p2)
+        child = ai.mutate(children[0])
+        self.assertTrue(type(child) is list)
+
+    '''
+    def testCreateGeneration(self):
+
+    def testEvalFitness(self):
+
+    def testGetPlacement(self):
+        ai = AIPlayer(0)
+        self.state = self.create_state(ai)
+        self.failIf()
+
+    def testGetMove(self):
+        ai = AIPlayer(0)
+        self.state = self.create_state(ai)
+        self.failIf()
+
+    def testRegisterWin(self):
+    '''
+
+def main():
+    unittest.main()
+
+if __name__ == '__main__':
+    main()
+
