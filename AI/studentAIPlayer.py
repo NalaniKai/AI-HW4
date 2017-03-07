@@ -65,6 +65,14 @@ class AIPlayer(Player):
             self.fitness.append(0)
 
     def getEnemySideCoord(self, pos):
+        '''
+        Description: Randomly generates a coordniate that is not occupied on the enemy's side of the board
+
+        Parameters:
+            pos - coordinate that has been used 
+
+        Returns: Random, unoccupied coordinate on the enemy's side of the board
+        '''
         enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
             (0,1), (1,0)]
 
@@ -78,6 +86,14 @@ class AIPlayer(Player):
                 return (x, y)
 
     def getAgentSideCoord(self, positions):
+        '''
+        Description: Randomly generates a coordniate that is not occupied on the agent's side of the board
+
+        Parameters:
+            positions - list of coordinates that have been used 
+
+        Returns: Random, unoccupied coordinate on the agent's side of the board
+        '''
         while(True):
             #Choose any x location
             x = random.randint(0, 9)
@@ -88,7 +104,16 @@ class AIPlayer(Player):
                 return (x, y)
 
     def createChildren(self, parent1, parent2):
-        #Create two children 
+        '''
+        Description: Randomly generates a position to split the parent genes and crossover. Creates
+                     two children from two parents and has a probability of having an additional mutation.
+
+        Parameters:
+            parent1 - parent to create child with
+            parent2 - parent to create child with
+
+        Returns: Two children genes 
+        ''' 
         split = random.randint(0,12)
 
         child1 = parent1[0:split]
@@ -104,6 +129,15 @@ class AIPlayer(Player):
         return [child1, child2]
 
     def mutate(self, child):
+        '''
+        Description: Randomly and legally mutates a child with a probability
+
+        Parameters:
+            child - child gene to be mutated or left alone
+
+        Returns:
+            child gene which could be mutated or not
+        '''
         chance = random.randint(0, 9)
         if chance < 3:
             pos = random.randint(0,len(child)-1)
