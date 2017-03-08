@@ -7,8 +7,11 @@ from Construction import CONSTR_STATS
 from Ant import UNIT_STATS
 from Move import Move
 from GameState import *
-from AIPlayerUtils import *
+import AIPlayerUtils as utils
 import unittest
+import itertools as itert 
+import collections as collect
+import operator as operator
 
 ##
 #AIPlayer
@@ -29,14 +32,14 @@ class AIPlayer(Player):
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "Genetic")
-        self.currGenes = []     #population 
+        self.currPop = []     #population 
         self.popSize = 6        #population size
         self.nextGene = 0       #current gene index
         self.fitness = []       #fitness score
         self.currFitness = []   #fitness scores of current gene
         self.currGame = 0
         self.geneGames = 2      #games to test current gene
-
+        self.currentGameState = None   #currentGameState
 
 
     def geneInit(self):
@@ -61,7 +64,7 @@ class AIPlayer(Player):
                 while pos == None:
                     pos = self.getEnemySideCoord(pos)
                 positions.append(pos)
-            self.currGenes.append(positions)
+            self.currPop.append(positions)
             self.fitness.append(0)
 
     def getEnemySideCoord(self, pos):
@@ -73,8 +76,11 @@ class AIPlayer(Player):
 
         Returns: Random, unoccupied coordinate on the enemy's side of the board
         '''
-        enemySetup = [(0,0), (5, 1), (0,3), (1,2), (2,1), (3,0), (0,2), (1,1), (2,0), \
-            (0,1), (1,0)]
+        enemySetup = [(9,9), (9, 8), (8,9), (9,7), (9,6), (8,8), (8,7), (7,9), (7,8), \
+            (6,9), (4,8)]
+
+        enemySetup.append(pos)
+        print(enemySetup)
 
         while(True):
             #Choose any x location
@@ -82,7 +88,7 @@ class AIPlayer(Player):
             #Choose any y location on enemy side of the board
             y = random.randint(6, 9)
             #Set the move if this space is empty
-            if (x, y) not in enemySetup or pos:
+            if (x, y) not in enemySetup:
                 return (x, y)
 
     def getAgentSideCoord(self, positions):
@@ -151,11 +157,151 @@ class AIPlayer(Player):
 
         return child
 
+    def printState(self, bestGene):
+        ai = AIPlayer(0)
+        self.state = self.create_state(ai)
 
-    #def createGeneration(self):
-        #next generation from the old one
+    def setup_state(self):
+        board = [[Location((col, row)) for row in xrange(0,c.BOARD_LENGTH)] for col in xrange(0,c.BOARD_LENGTH)]
+        p1Inventory = Inventory(c.PLAYER_ONE, [], [], 0)
+        p2Inventory = Inventory(c.PLAYER_TWO, [], [], 0)
+        neutralInventory = Inventory(c.NEUTRAL, [], [], 0)
+        return GameState(board, [p1Inventory, p2Inventory, neutralInventory], c.SETUP_PHASE_1, c.PLAYER_ONE)
 
-    #def evalFitness(self):
+    def place_items(self, piece, constrsToPlace, state):
+        #translate coords to match player
+        piece = state.coordLookup(piece, state.whoseTurn)
+        #get construction to place
+        constr = constrsToPlace.pop(0)
+        #give constr its coords
+        constr.coords = piece
+        #put constr on board
+        state.board[piece[0]][piece[1]].constr = constr
+        if constr.type == c.ANTHILL or constr.type == c.TUNNEL:
+            #update the inventory
+            state.inventories[state.whoseTurn].constrs.append(constr)
+        else:  #grass and food
+            state.inventories[c.NEUTRAL].constrs.append(constr)
+
+    def setup_play(self, state):
+        p1inventory = state.inventories[c.PLAYER_ONE]
+        p2inventory = state.inventories[c.PLAYER_TWO]
+        #get anthill coords
+        p1AnthillCoords = p1inventory.constrs[0].coords
+        p2AnthillCoords = p2inventory.constrs[0].coords
+        #get tunnel coords
+        p1TunnelCoords = p1inventory.constrs[1].coords
+        p2TunnelCoords = p2inventory.constrs[1].coords
+        #create queen and worker ants
+        p1Queen = Ant(p1AnthillCoords, c.QUEEN, c.PLAYER_ONE)
+        p2Queen = Ant(p2AnthillCoords, c.QUEEN, c.PLAYER_TWO)
+        p1Worker = Ant(p1TunnelCoords, c.WORKER, c.PLAYER_ONE)
+        p2Worker = Ant(p2TunnelCoords, c.WORKER, c.PLAYER_TWO)
+        #put ants on board
+        state.board[p1Queen.coords[0]][p1Queen.coords[1]].ant = p1Queen
+        state.board[p2Queen.coords[0]][p2Queen.coords[1]].ant = p2Queen
+        state.board[p1Worker.coords[0]][p1Worker.coords[1]].ant = p1Worker
+        state.board[p2Worker.coords[0]][p2Worker.coords[1]].ant = p2Worker
+        #add the queens to the inventories
+        p1inventory.ants.append(p1Queen)
+        p2inventory.ants.append(p2Queen)
+        p1inventory.ants.append(p1Worker)
+        p2inventory.ants.append(p2Worker)
+        #give the players the initial food
+        p1inventory.foodCount = 1
+        p2inventory.foodCount = 1
+        #change to play phase
+        state.phase = c.PLAY_PHASE
+
+    def create_state(self, ai):
+        self.state = self.setup_state()
+        players = [c.PLAYER_ONE, c.PLAYER_TWO]
+
+        for player in players:
+            self.state.whoseTurn = player
+            constrsToPlace = []
+            constrsToPlace += [Building(None, c.ANTHILL, player)]
+            constrsToPlace += [Building(None, c.TUNNEL, player)]
+            constrsToPlace += [Construction(None, c.GRASS) for i in xrange(0,9)]
+
+            setup = ai.getPlacement(self.state)
+
+            for piece in setup:
+                self.place_items(piece, constrsToPlace, self.state)
+
+            self.state.flipBoard()
+
+        self.state.phase = c.SETUP_PHASE_2
+
+        for player in players:
+            self.state.whoseTurn = player
+            constrsToPlace = []
+            constrsToPlace += [Construction(None, c.FOOD) for i in xrange(0,2)]
+
+            setup = ai.getPlacement(self.state)
+
+            for food in setup:
+                self.place_items(food, constrsToPlace, self.state)
+
+            self.state.flipBoard()
+
+        self.setup_play(self.state)
+        self.state.whoseTurn = c.PLAYER_ONE
+        return self.state
+        '''
+
+    def createGeneration(self):
+        #put parent genes and score in dictionary
+        parents = [dict({'gene':gene, 'score': self.fitness[i]}) for i, gene in enumerate(self.currPop)]
+        self.currPop = []
+
+        #sort parents by score descending 
+        parents.sort(key=operator.itemgetter('score'), reverse=True)
+
+        #get best half of parent genes
+        bestParents = [i.values()[0] for i in parents]
+        bestParents = bestParents[:self.popSize/2]
+
+        #self.printState(bestParents[0])
+
+        #get all combinations of parents in best half
+        parentPairs = itert.combinations(bestParents, 2)
+
+        #get children to fill next population
+        for pair in parentPairs:
+            children = self.createChildren(pair[0], pair[1])
+            self.currPop.append(children[0])
+            self.currPop.append(children[1])
+            if len(self.currPop) == self.popSize:
+                break
+
+    def evalFitness(self, hasWon):
+        score = 0
+        if self.currentGameState != None:
+            total = 19
+            agentInv = []
+            enemyInv = []
+
+            invOne = self.currentGameState.inventories[0]
+            invTwo = self.currentGameState.inventories[1]
+
+            if invOne.player == self.playerId:
+                agentInv = invOne
+                enemyInv = invTwo
+            else:
+                agentInv = invTwo
+                enemyInv = invOne
+
+            agentPoints = (agentInv.foodCount + agentInv.getQueen().health) / total
+            enemyPoints = (enemyInv.foodCount + enemyInv.getQueen().health) / total
+            score = (agentPoints - enemyPoints) * .5
+                
+        if hasWon: 
+            score += .5 
+        else:
+            score -= .5
+            
+        return score
 
     ##
     #getPlacement
@@ -172,13 +318,12 @@ class AIPlayer(Player):
     #Return: The coordinates of where the construction is to be placed
     ##
     def getPlacement(self, currentState):
-        if self.currGenes == []:
+        if self.currPop == []:
             self.geneInit()
-
         if currentState.phase == SETUP_PHASE_1:    #stuff on my side
-            return self.currGenes[self.nextGene][0:11]
+            return self.currPop[self.nextGene][0:11]
         elif currentState.phase == SETUP_PHASE_2:
-            return self.currGenes[self.nextGene][11:]
+            return self.currPop[self.nextGene][11:]
     
     ##
     #getMove
@@ -190,13 +335,16 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getMove(self, currentState):
-        moves = listAllLegalMoves(currentState)
+        moves = utils.listAllLegalMoves(currentState)
         selectedMove = moves[random.randint(0,len(moves) - 1)];
 
         #don't do a build move if there are already 3+ ants
         numAnts = len(currentState.inventories[currentState.whoseTurn].ants)
         while (selectedMove.moveType == BUILD and numAnts >= 3):
             selectedMove = moves[random.randint(0,len(moves) - 1)];
+
+        if currentState != None:
+            self.currentGameState = currentState 
             
         return selectedMove
     
@@ -223,27 +371,41 @@ class AIPlayer(Player):
     #   hasWon - True if the player has won the game, False if the player lost. (Boolean)
     #
     def registerWin(self, hasWon):
-        #Update fitness of currGene
-        self.currFitness[self.currGame] = self.evalFitness()
+        #give fitness score to current trial of current gene
+        self.currFitness.append(self.evalFitness(hasWon))
+        #increment to next game trial for current gene
+        self.currGame += 1
 
+        #reached number of trials per gene
+        if self.currGame == self.geneGames:
+            #setting fitness score for gene
+            self.fitness.append(self.calcFitness())
+            self.nextGene += 1      #incrementing to use next gene
+            self.currGame = 0       #reset current game count
+            self.currFitness = []   #reset fitness trial scores
 
-        #Judge whether the current gene eval is complete
-
-
-
-
-        #Create new Pop if all genes have been fully evaluated
-        #reset index to the beginning
-
+        #reached population size
+        if self.nextGene == self.popSize:
+            self.createGeneration() #create new generation
+            self.nextGene = 0       #reset current gene index
+            self.fitness = []       #reset fitness score
+            self.currFitness = []   #reset fitness scores of current gene
+            self.currGame = 0       #reset trials
 
         pass
 
+    def calcFitness(self):
+        total = 0.0
+        for score in self.currFitness:
+            total += score
+        return score / len(self.currFitness)
+
 class Unit_Tests(unittest.TestCase):
 
-    def testGeneInit(self):
+    '''def testGeneInit(self):
         ai = AIPlayer(0)
         ai.geneInit()
-        self.failIf(ai.currGenes is [])
+        self.failIf(ai.currPop is [])
         self.failIf(ai.fitness is [])
 
     def testGetEnemySideCoord(self):
@@ -259,19 +421,25 @@ class Unit_Tests(unittest.TestCase):
     def testCreateChildren(self):
         ai = AIPlayer(0)
         ai.geneInit()
-        p1 = ai.currGenes[0]
-        p2 = ai.currGenes[1]
+        p1 = ai.currPop[0]
+        p2 = ai.currPop[1]
         children = ai.createChildren(p1, p2)
         self.failIf(type(children) is not list)
 
     def testMutate(self):
         ai = AIPlayer(0)
         ai.geneInit()
-        p1 = ai.currGenes[0]
-        p2 = ai.currGenes[1]
+        p1 = ai.currPop[0]
+        p2 = ai.currPop[1]
         children = ai.createChildren(p1, p2)
         child = ai.mutate(children[0])
-        self.assertTrue(type(child) is list)
+        self.assertTrue(type(child) is list)'''
+
+    def testCreateGeneration(self):
+        ai = AIPlayer(0)
+        ai.geneInit()
+        ai.createGeneration()
+        
 
     '''
     def testCreateGeneration(self):
