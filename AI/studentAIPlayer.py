@@ -1,5 +1,6 @@
 import random
 import sys
+import os.path
 sys.path.append("..")  #so other modules can be found in parent dir
 from Player import *
 from Constants import *
@@ -220,8 +221,44 @@ class AIPlayer(Player):
                         Inventory(NEUTRAL, [], cons3, 0) ]
         dummyState =  GameState(None, newInventories, 2, self.playerId)
 
-        f = open('evidence.txt', 'w')
-        print >> f, 'Evidence: ', utils.asciiPrintState(dummyState)
+        self.asciiPrintState(dummyState)
+
+    def asciiPrintState(self, state):
+        file = 'evidence.txt'
+        f = None 
+        if os.path.isfile(file):
+            f = open(file, 'a')
+        else:
+            f = open(file, 'w')
+
+        f.write("\n")
+        #select coordinate ranges such that board orientation will match the GUI
+        #for either player
+        coordRange = range(0,10)
+        colIndexes = " 0123456789"
+        if (state.whoseTurn == PLAYER_TWO):
+            coordRange = range(9,-1,-1)
+            colIndexes = " 9876543210"
+
+        #print the board with a border of column/row indexes
+        f.write(str(colIndexes) + "\n")
+        index = 0              #row index
+        for x in coordRange:
+            row = str(x)
+            for y in coordRange:
+                ant = utils.getAntAt(state, (y, x))
+                if (ant != None):
+                    row += utils.charRepAnt(ant)
+                else:
+                    constr = utils.getConstrAt(state, (y, x))
+                    if (constr != None):
+                        row += utils.charRepConstr(constr)
+                    else:
+                        row += "."
+            f.write(row + str(x) + "\n")
+            index += 1
+        f.write(str(colIndexes) + "\n")
+        f.close()
 
     def createGeneration(self):
         #put parent genes and score in dictionary
@@ -236,7 +273,6 @@ class AIPlayer(Player):
         bestParents = bestParents[:self.popSize/2]
 
         self.printState(bestParents[0])
-        print(bestParents[0])
 
         #get all combinations of parents in best half
         parentPairs = itert.combinations(bestParents, 2)
@@ -376,7 +412,7 @@ class AIPlayer(Player):
 
 class Unit_Tests(unittest.TestCase):
 
-    '''def testGeneInit(self):
+    def testGeneInit(self):
         ai = AIPlayer(0)
         ai.geneInit()
         self.failIf(ai.currPop is [])
@@ -407,31 +443,12 @@ class Unit_Tests(unittest.TestCase):
         p2 = ai.currPop[1]
         children = ai.createChildren(p1, p2)
         child = ai.mutate(children[0])
-        self.assertTrue(type(child) is list)'''
+        self.assertTrue(type(child) is list)
 
     def testCreateGeneration(self):
         ai = AIPlayer(0)
         ai.geneInit()
         ai.createGeneration()
-        
-
-    '''
-    def testCreateGeneration(self):
-
-    def testEvalFitness(self):
-
-    def testGetPlacement(self):
-        ai = AIPlayer(0)
-        self.state = self.create_state(ai)
-        self.failIf()
-
-    def testGetMove(self):
-        ai = AIPlayer(0)
-        self.state = self.create_state(ai)
-        self.failIf()
-
-    def testRegisterWin(self):
-    '''
 
 def main():
     unittest.main()
