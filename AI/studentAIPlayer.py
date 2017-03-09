@@ -12,6 +12,7 @@ import unittest
 import itertools as itert 
 import collections as collect
 import operator as operator
+from Building import Building
 
 ##
 #AIPlayer
@@ -80,7 +81,6 @@ class AIPlayer(Player):
             (6,9), (4,8)]
 
         enemySetup.append(pos)
-        print(enemySetup)
 
         while(True):
             #Choose any x location
@@ -109,6 +109,41 @@ class AIPlayer(Player):
             if (x, y) not in positions:
                 return (x, y)
 
+    def checkParent(self, agentSide, enemySide, parent):
+        for coord in parent[:11]:
+            if len(agentSide) < 11:
+                if coord not in agentSide:
+                    agentSide.append(coord)
+            else:
+                break
+
+        for coord in parent[11:]:
+            if len(enemySide) < 2:
+                if coord not in enemySide:
+                    enemySide.append(coord)
+            else:
+                break
+
+        return (agentSide, enemySide)
+
+    def ensureDifferent(self, child, parent1, parent2):
+        #make copy of child
+        agentSide = child[:11]
+        enemySide = child[11:]
+
+        agentSide = list(set(agentSide))
+        enemySide = list(set(enemySide))
+
+        result = self.checkParent(agentSide, enemySide, parent1)
+        result = self.checkParent(result[0], result[1], parent2)
+
+        newChild = result[0]
+        newChild.append(result[1][0])
+        newChild.append(result[1][1])
+
+        return newChild
+
+
     def createChildren(self, parent1, parent2):
         '''
         Description: Randomly generates a position to split the parent genes and crossover. Creates
@@ -126,13 +161,24 @@ class AIPlayer(Player):
         for coord in parent2[split:]:
             child1.append(coord)
         child1 = self.mutate(child1)
+        child1 = self.ensureDifferent(child1, parent1, parent2)
 
         child2 = parent2[0:split]
         for coord in parent1[split:]:
             child2.append(coord)
         child2 = self.mutate(child2)
+        child2 = self.ensureDifferent(child2, parent1, parent2)
 
         return [child1, child2]
+
+    def getCoord(self, pos, child):
+        coord = None
+        if pos < 11:
+            coord = self.getAgentSideCoord(child)
+        else:
+            coord = self.getEnemySideCoord(child)
+
+        return coord 
 
     def mutate(self, child):
         '''
@@ -148,107 +194,34 @@ class AIPlayer(Player):
         if chance < 3:
             pos = random.randint(0,len(child)-1)
             coord = None
-            if pos < 11:
-                coord = self.getAgentSideCoord(child)
-            else:
-                coord = self.getEnemySideCoord(child)
-
-            child[pos] = coord 
-
+            
+            child[pos] = self.getCoord(pos, child)
         return child
 
     def printState(self, bestGene):
-        ai = AIPlayer(0)
-        self.state = self.create_state(ai)
+        ants1 = []
+        cons1 = []
+        ants2 = []
+        cons2 = [] #Booger Player Buildings
+        cons3 = [] #FOOD
+        
+        for i, coord in enumerate(bestGene):
+            if i == 0:
+                cons1.append(Building((coord), ANTHILL, self.playerId))
+            elif i == 1:
+                cons1.append(Building((coord), TUNNEL, self.playerId))
+            elif i < 11:
+                cons1.append(Building((coord), GRASS, self.playerId))
+            else:
+                cons3.append(Building((coord), FOOD, NEUTRAL))
 
-    def setup_state(self):
-        board = [[Location((col, row)) for row in xrange(0,c.BOARD_LENGTH)] for col in xrange(0,c.BOARD_LENGTH)]
-        p1Inventory = Inventory(c.PLAYER_ONE, [], [], 0)
-        p2Inventory = Inventory(c.PLAYER_TWO, [], [], 0)
-        neutralInventory = Inventory(c.NEUTRAL, [], [], 0)
-        return GameState(board, [p1Inventory, p2Inventory, neutralInventory], c.SETUP_PHASE_1, c.PLAYER_ONE)
+        newInventories = [Inventory(self.playerId, ants1, cons1, 0),
+                        Inventory(abs(self.playerId-1), ants2, cons2, 0),
+                        Inventory(NEUTRAL, [], cons3, 0) ]
+        dummyState =  GameState(None, newInventories, 2, self.playerId)
 
-    def place_items(self, piece, constrsToPlace, state):
-        #translate coords to match player
-        piece = state.coordLookup(piece, state.whoseTurn)
-        #get construction to place
-        constr = constrsToPlace.pop(0)
-        #give constr its coords
-        constr.coords = piece
-        #put constr on board
-        state.board[piece[0]][piece[1]].constr = constr
-        if constr.type == c.ANTHILL or constr.type == c.TUNNEL:
-            #update the inventory
-            state.inventories[state.whoseTurn].constrs.append(constr)
-        else:  #grass and food
-            state.inventories[c.NEUTRAL].constrs.append(constr)
-
-    def setup_play(self, state):
-        p1inventory = state.inventories[c.PLAYER_ONE]
-        p2inventory = state.inventories[c.PLAYER_TWO]
-        #get anthill coords
-        p1AnthillCoords = p1inventory.constrs[0].coords
-        p2AnthillCoords = p2inventory.constrs[0].coords
-        #get tunnel coords
-        p1TunnelCoords = p1inventory.constrs[1].coords
-        p2TunnelCoords = p2inventory.constrs[1].coords
-        #create queen and worker ants
-        p1Queen = Ant(p1AnthillCoords, c.QUEEN, c.PLAYER_ONE)
-        p2Queen = Ant(p2AnthillCoords, c.QUEEN, c.PLAYER_TWO)
-        p1Worker = Ant(p1TunnelCoords, c.WORKER, c.PLAYER_ONE)
-        p2Worker = Ant(p2TunnelCoords, c.WORKER, c.PLAYER_TWO)
-        #put ants on board
-        state.board[p1Queen.coords[0]][p1Queen.coords[1]].ant = p1Queen
-        state.board[p2Queen.coords[0]][p2Queen.coords[1]].ant = p2Queen
-        state.board[p1Worker.coords[0]][p1Worker.coords[1]].ant = p1Worker
-        state.board[p2Worker.coords[0]][p2Worker.coords[1]].ant = p2Worker
-        #add the queens to the inventories
-        p1inventory.ants.append(p1Queen)
-        p2inventory.ants.append(p2Queen)
-        p1inventory.ants.append(p1Worker)
-        p2inventory.ants.append(p2Worker)
-        #give the players the initial food
-        p1inventory.foodCount = 1
-        p2inventory.foodCount = 1
-        #change to play phase
-        state.phase = c.PLAY_PHASE
-
-    def create_state(self, ai):
-        self.state = self.setup_state()
-        players = [c.PLAYER_ONE, c.PLAYER_TWO]
-
-        for player in players:
-            self.state.whoseTurn = player
-            constrsToPlace = []
-            constrsToPlace += [Building(None, c.ANTHILL, player)]
-            constrsToPlace += [Building(None, c.TUNNEL, player)]
-            constrsToPlace += [Construction(None, c.GRASS) for i in xrange(0,9)]
-
-            setup = ai.getPlacement(self.state)
-
-            for piece in setup:
-                self.place_items(piece, constrsToPlace, self.state)
-
-            self.state.flipBoard()
-
-        self.state.phase = c.SETUP_PHASE_2
-
-        for player in players:
-            self.state.whoseTurn = player
-            constrsToPlace = []
-            constrsToPlace += [Construction(None, c.FOOD) for i in xrange(0,2)]
-
-            setup = ai.getPlacement(self.state)
-
-            for food in setup:
-                self.place_items(food, constrsToPlace, self.state)
-
-            self.state.flipBoard()
-
-        self.setup_play(self.state)
-        self.state.whoseTurn = c.PLAYER_ONE
-        return self.state
-        '''
+        f = open('evidence.txt', 'w')
+        print >> f, 'Evidence: ', utils.asciiPrintState(dummyState)
 
     def createGeneration(self):
         #put parent genes and score in dictionary
@@ -262,7 +235,8 @@ class AIPlayer(Player):
         bestParents = [i.values()[0] for i in parents]
         bestParents = bestParents[:self.popSize/2]
 
-        #self.printState(bestParents[0])
+        self.printState(bestParents[0])
+        print(bestParents[0])
 
         #get all combinations of parents in best half
         parentPairs = itert.combinations(bestParents, 2)
