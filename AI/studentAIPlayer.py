@@ -34,7 +34,7 @@ class AIPlayer(Player):
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "Genetic")
-        self.currPop = []     #population 
+        self.currPop = []       #population 
         self.popSize = 6        #population size
         self.nextGene = 0       #current gene index
         self.fitness = []       #fitness score
@@ -83,7 +83,7 @@ class AIPlayer(Player):
 
         enemySetup.append(pos)
 
-        while(True):
+        while(True): #ensure a coord is returned 
             #Choose any x location
             x = random.randint(0, 9)
             #Choose any y location on enemy side of the board
@@ -111,6 +111,20 @@ class AIPlayer(Player):
                 return (x, y)
 
     def checkParent(self, agentSide, enemySide, parent):
+        '''
+        Description: Makes sure there are valid coords for every placement for
+                     food, grass, anthill, and tunnel
+
+        Parameters:
+            agentSide - list of coords for grass, anthill, tunnel that are unique
+            enemySide - list of coords for food that are unique
+            parent - the gene that contains the agentSide and enemySide including
+                    duplicate coords
+
+        Return: modified agentSide and enemySide lists so each coord is unique
+        '''
+
+        #looks through grass, anthill, tunnel
         for coord in parent[:11]:
             if len(agentSide) < 11:
                 if coord not in agentSide:
@@ -118,6 +132,7 @@ class AIPlayer(Player):
             else:
                 break
 
+        #looks through food coords
         for coord in parent[11:]:
             if len(enemySide) < 2:
                 if coord not in enemySide:
@@ -128,13 +143,24 @@ class AIPlayer(Player):
         return (agentSide, enemySide)
 
     def ensureDifferent(self, child, parent1, parent2):
-        #make copy of child
-        agentSide = child[:11]
-        enemySide = child[11:]
+        '''
+        Description: Makes sure each coord in a gene is unique
 
-        agentSide = list(set(agentSide))
+        Parameters:
+            child - child created from parents
+            parent1 - one of child's parents
+            parent2 - other child parent
+
+        Returns: Child with unqiue coords
+        '''
+        agentSide = child[:11] #list for grass, anthill, tunnel
+        enemySide = child[11:] #list for food
+
+        #only keep unique coords
+        agentSide = list(set(agentSide)) 
         enemySide = list(set(enemySide))
 
+        #ensure the gene has a coord for each placement item in setup
         result = self.checkParent(agentSide, enemySide, parent1)
         result = self.checkParent(result[0], result[1], parent2)
 
@@ -156,14 +182,16 @@ class AIPlayer(Player):
 
         Returns: Two children genes 
         ''' 
-        split = random.randint(0,12)
+        split = random.randint(0,12) #random place to slice gene
 
+        #create first child
         child1 = parent1[0:split]
         for coord in parent2[split:]:
             child1.append(coord)
         child1 = self.mutate(child1)
         child1 = self.ensureDifferent(child1, parent1, parent2)
 
+        #create second child
         child2 = parent2[0:split]
         for coord in parent1[split:]:
             child2.append(coord)
@@ -173,6 +201,7 @@ class AIPlayer(Player):
         return [child1, child2]
 
     def getCoord(self, pos, child):
+        #returns a valid coord for the correct position in the gene
         coord = None
         if pos < 11:
             coord = self.getAgentSideCoord(child)
@@ -192,20 +221,28 @@ class AIPlayer(Player):
             child gene which could be mutated or not
         '''
         chance = random.randint(0, 9)
-        if chance < 3:
+        if chance < 3: #random chance for mutation
             pos = random.randint(0,len(child)-1)
             coord = None
-            
             child[pos] = self.getCoord(pos, child)
         return child
 
     def printState(self, bestGene):
+        '''
+        Description: Creates a state with the best gene in a population to print an
+                     ascii representation to a file.
+
+        Parameters:
+            bestGene - best gene in the current population
+        '''
+
         ants1 = []
         cons1 = []
         ants2 = []
         cons2 = [] #Booger Player Buildings
         cons3 = [] #FOOD
         
+        #fill state with best gene's placements
         for i, coord in enumerate(bestGene):
             if i == 0:
                 cons1.append(Building((coord), ANTHILL, self.playerId))
@@ -221,10 +258,18 @@ class AIPlayer(Player):
                         Inventory(NEUTRAL, [], cons3, 0) ]
         dummyState =  GameState(None, newInventories, 2, self.playerId)
 
-        self.asciiPrintState(dummyState)
+        self.asciiPrintState(dummyState) #print state to file
 
     def asciiPrintState(self, state):
+        '''
+        Description: Creates ascii representation of the state and prints to a file called "evidence"
+
+        Parameters:
+            state - gamestate with the placement represented by the best gene
+        '''
         file = 'evidence.txt'
+
+        #open file, create if necessary
         f = None 
         if os.path.isfile(file):
             f = open(file, 'a')
@@ -261,6 +306,10 @@ class AIPlayer(Player):
         f.close()
 
     def createGeneration(self):
+        '''
+        Description: Creates next generation/population using the fitness scores of the genes in the 
+                     current population 
+        '''
         #put parent genes and score in dictionary
         parents = [dict({'gene':gene, 'score': self.fitness[i]}) for i, gene in enumerate(self.currPop)]
         self.currPop = []
@@ -272,7 +321,7 @@ class AIPlayer(Player):
         bestParents = [i.values()[0] for i in parents]
         bestParents = bestParents[:self.popSize/2]
 
-        self.printState(bestParents[0])
+        self.printState(bestParents[0]) #print best gene into evidence file
 
         #get all combinations of parents in best half
         parentPairs = itert.combinations(bestParents, 2)
@@ -286,6 +335,16 @@ class AIPlayer(Player):
                 break
 
     def evalFitness(self, hasWon):
+        '''
+        Description: Assigns fitness score to gene based on whether the agent won
+                     in addition to food and queen health
+
+        Parameters: 
+            hasWon - whether agent has won or not
+
+        Return:
+            score - fitness score for the gene
+        '''
         score = 0
         if self.currentGameState != None:
             total = 19
@@ -405,11 +464,13 @@ class AIPlayer(Player):
         pass
 
     def calcFitness(self):
+        #calculation average fitness of a gene based on trials
         total = 0.0
         for score in self.currFitness:
             total += score
         return score / len(self.currFitness)
 
+#unit tests
 class Unit_Tests(unittest.TestCase):
 
     def testGeneInit(self):
